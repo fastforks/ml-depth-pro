@@ -134,6 +134,12 @@ class DepthProFast(nn.Module):
         self.register_buffer("m1", m1, persistent=False)        # [48, 48]
         self.register_buffer("m2", m2, persistent=False)        # [24, 24]
         self.to(model.encoder.patch_encoder.pos_embed.device)
+        # all convolutions after the ViTs run channels-last (NHWC): the merged token maps are NHWC already, and mixed layouts
+        # make cuDNN insert NCHW <-> NHWC conversion kernels
+        cl = [self.up_latent0, self.up_latent1, self.up0, self.up1, self.up2, self.up_lowres, self.fuse_lowres, self.dconvs,
+              self.fusions, self.fdeconv, self.head] + ([self.fov.downsample, self.fov.head] if self.fov is not None else [])
+        for m in cl:
+            m.to(memory_format=torch.channels_last)
 
     # ------------------------------------------------------------------------------------------------ network core
     @staticmethod
