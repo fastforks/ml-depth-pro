@@ -1,3 +1,24 @@
+# Depth Pro: faster inference fork
+
+> **You are on `portable`.** Research fork of [apple/ml-depth-pro](https://github.com/apple/ml-depth-pro) (`main` mirrors upstream). Two branches:
+> - [`portable`](https://github.com/fastforks/ml-depth-pro/tree/portable): `src/depth_pro/fast_inference.py`, `DepthProFast(model)`: export-friendly inference graph (token gathers instead of crops, merge by index, composed deconv/1x1 and head weights, FOV head skipped when `f_px` is given, channels-last convs after the ViTs); plain PyTorch, no custom kernels, no build step. With fp32 on CPU it reproduces the upstream forward (max abs 1e-6).
+> - [`cuda-kernels`](https://github.com/fastforks/ml-depth-pro/tree/cuda-kernels): `portable` plus `src/depth_pro/fast`, `DepthProMax(DepthProFast(model))`: CUTLASS GEMMs / convs with fused epilogues (bias, LayerScale, residual, GELU, ReLU) and fp16 accumulation, fp16-accumulate flash attention. Prebuilt for torch 2.14 + CUDA 13 (SASS sm_80/86/89/120 + compute_80 PTX); for another torch build, rebuild once with nvcc + CUTLASS headers (`CUTLASS_DIR=... python -m depth_pro.fast.dpfused`).
+>
+> Licence: the Apple licence of upstream carries over unchanged (see `LICENSE`; read it before reuse). The pretrained weights are Apple's and are not included.
+
+`dinov2l16_384`, 1536x1536 network input, fp16 weights, RTX 5060 Ti 16 GB, torch 2.14.1+cu130, 2026-10-23. Median of 10 runs after 3 warm-ups; memory = torch peak allocated / reserved; AbsRel against Middlebury-H laser GT (6 scenes, non-occluded, short check, f_px not given for raw); TensorRT: not measured (no working recipe in this release).
+
+| version | KITTI ms | Midd-H ms | speed-up at H (vs flags / vs upstream) | peak MB at KITTI (alloc / reserved) | peak MB at H (alloc / reserved) | startup / first call at H | Midd-H AbsRel raw / median-scaled (6 scenes) | max / mean rel. diff vs upstream at H |
+|---|---|---|---|---|---|---|---|---|
+| upstream (fp16 weights, as upstream CLI) | 526.8 | 532.2 | 1.00x | 3816 / 5270 | 3821 / 5322 | 15.4 s / 0.82 s | 0.1481 / 0.0609 | - |
+| upstream + flags (inference_mode, cudnn.benchmark, TF32) | 522.0 | 528.1 | 1.01x | 3815 / 5276 | 3821 / 4898 | 17.0 s / 3.86 s | 0.1480 / 0.0609 | 0.003 / 0.00008 |
+| **portable** (`DepthProFast`) | 520.4 | 519.5 | 1.02x / 1.02x | 3529 / 4304 | 3532 / 4218 | 13.5 s / 0.79 s | 0.1482 / 0.0609 | 0.00305 / 0.000169 |
+| **cuda-kernels** (`DepthProMax`) | 282.8 | 282.3 | 1.87x / 1.89x | 3632 / 4516 | 3635 / 4516 | 13.6 s / 0.54 s | 0.1481 / 0.0609 | 0.0079 / 0.000839 |
+
+upstream + flags = unmodified upstream code (already fp16 weights from `create_model_and_transforms(precision=torch.half)`; the CLI default), driver-side only: torch.inference_mode (infer already uses it), cudnn.benchmark=True, TF32 allowed; autocast / channels_last / .half() not applicable (fp16 already; channels_last cannot be set without editing the network); torch.compile not part of the row.
+
+---
+
 ## Depth Pro: Sharp Monocular Metric Depth in Less Than a Second
 
 This software project accompanies the research paper:
