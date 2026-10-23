@@ -1,6 +1,6 @@
 # Depth Pro: faster inference fork
 
-> **You are on `portable`.** Research fork of [apple/ml-depth-pro](https://github.com/apple/ml-depth-pro) (`main` mirrors upstream). Two branches:
+> **You are on `cuda-kernels`.** Research fork of [apple/ml-depth-pro](https://github.com/apple/ml-depth-pro) (`main` mirrors upstream). Two branches:
 > - [`portable`](https://github.com/fastforks/ml-depth-pro/tree/portable): `src/depth_pro/fast_inference.py`, `DepthProFast(model)`: export-friendly inference graph (token gathers instead of crops, merge by index, composed deconv/1x1 and head weights, FOV head skipped when `f_px` is given, channels-last convs after the ViTs); plain PyTorch, no custom kernels, no build step. With fp32 on CPU it reproduces the upstream forward (max abs 1e-6).
 > - [`cuda-kernels`](https://github.com/fastforks/ml-depth-pro/tree/cuda-kernels): `portable` plus `src/depth_pro/fast`, `DepthProMax(DepthProFast(model))`: CUTLASS GEMMs / convs with fused epilogues (bias, LayerScale, residual, GELU, ReLU) and fp16 accumulation, fp16-accumulate flash attention. Prebuilt for torch 2.14 + CUDA 13 (SASS sm_80/86/89/120 + compute_80 PTX); for another torch build, rebuild once with nvcc + CUTLASS headers (`CUTLASS_DIR=... python -m depth_pro.fast.dpfused`).
 >
